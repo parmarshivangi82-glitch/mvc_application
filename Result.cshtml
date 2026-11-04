@@ -1,0 +1,106 @@
+@using MVCapplication.ViewModels
+@model PdfResultViewModel
+@{
+    ViewData["Title"] = "Extraction preview";
+    var pageCount = Model.Document.Pages.Count;
+    var blockCount = Model.Document.Pages.Sum(page => page.Blocks.Count);
+}
+
+<div class="preview-shell">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <p class="workspace-eyebrow mb-2">DOCUMENT PREVIEW</p>
+            <h1 class="h3 fw-semibold mb-1">@Model.FileName</h1>
+            <p class="text-muted mb-0">@pageCount page@(pageCount == 1 ? "" : "s") · @blockCount content blocks</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-secondary" id="copyButton">Copy text</button>
+            <a class="btn btn-outline-primary" asp-action="DownloadJson" asp-route-id="@Model.Id">JSON</a>
+            <a class="btn btn-outline-primary" asp-action="DownloadExcel" asp-route-id="@Model.Id">Excel</a>
+            <a class="btn btn-primary" asp-action="Download" asp-route-id="@Model.Id">Text</a>
+            <a class="btn btn-light border" asp-action="Upload">New PDF</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Document.Metadata.Title) || !string.IsNullOrWhiteSpace(Model.Document.Metadata.Author))
+    {
+        <div class="document-meta mb-3">
+            @if (!string.IsNullOrWhiteSpace(Model.Document.Metadata.Title)) { <span><strong>Title</strong> @Model.Document.Metadata.Title</span> }
+            @if (!string.IsNullOrWhiteSpace(Model.Document.Metadata.Author)) { <span><strong>Author</strong> @Model.Document.Metadata.Author</span> }
+        </div>
+    }
+
+    <div class="document-pages" id="documentPreview">
+        @if (pageCount == 0 || !Model.Document.Pages.Any(page => page.Blocks.Count > 0))
+        {
+            <div class="document-page text-center text-muted py-5">No readable text was found. Scanned PDFs require OCR.</div>
+        }
+        @foreach (var page in Model.Document.Pages)
+        {
+            <article class="document-page">
+                <div class="page-label">PAGE @(page.Number) <span>@(page.Width.ToString("0")) × @(page.Height.ToString("0")) pt</span></div>
+                @foreach (var block in page.Blocks)
+                {
+                    @if (block is HeadingBlock heading)
+                    {
+                        <h2 class="document-heading level-@heading.Level">@heading.Text</h2>
+                    }
+                    else if (block is ParagraphBlock paragraph)
+                    {
+                        <p class="document-paragraph">
+                            @if (paragraph.Runs.Count == 0) { @paragraph.Text }
+                            @foreach (var run in paragraph.Runs)
+                            {
+                                <span style="font-size:@(Math.Clamp(run.FontSize, 6, 48))pt;color:@run.Color;font-weight:@(run.Bold ? "700" : "400");font-style:@(run.Italic ? "italic" : "normal")">@run.Text</span>
+                            }
+                        </p>
+                    }
+                    else if (block is ListBlock list)
+                    {
+                        @if (list.Ordered)
+                        {
+                            <ol class="document-list">@foreach (var item in list.Items) { <li>@item.Text</li> }</ol>
+                        }
+                        else
+                        {
+                            <ul class="document-list">@foreach (var item in list.Items) { <li>@item.Text</li> }</ul>
+                        }
+                    }
+                    else if (block is TableBlock table)
+                    {
+                        <div class="table-responsive extracted-table-wrap">
+                            <table class="table table-sm extracted-table">
+                                @if (table.HeaderRowCount > 0)
+                                {
+                                    <thead>
+                                        @for (var rowIndex = 0; rowIndex < Math.Min(table.HeaderRowCount, table.Rows.Count); rowIndex++)
+                                        {
+                                            <tr>@foreach (var cell in table.Rows[rowIndex]) { <th scope="col">@cell.Text</th> }</tr>
+                                        }
+                                    </thead>
+                                }
+                                <tbody>
+                                    @for (var rowIndex = Math.Min(table.HeaderRowCount, table.Rows.Count); rowIndex < table.Rows.Count; rowIndex++)
+                                    {
+                                        <tr>@foreach (var cell in table.Rows[rowIndex]) { <td>@cell.Text</td> }</tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </article>
+        }
+    </div>
+    <pre class="visually-hidden" id="plainText">@Model.PlainText</pre>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('copyButton').addEventListener('click', async event => {
+            await navigator.clipboard.writeText(document.getElementById('plainText').textContent);
+            event.currentTarget.textContent = 'Copied';
+            window.setTimeout(() => event.currentTarget.textContent = 'Copy text', 1500);
+        });
+    </script>
+}

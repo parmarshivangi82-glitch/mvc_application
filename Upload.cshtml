@@ -1,0 +1,113 @@
+@{
+    ViewData["Title"] = "Upload PDF";
+}
+
+<div class="workspace-shell">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+        <div>
+            <p class="workspace-eyebrow mb-2">DOCUMENT WORKSPACE</p>
+            <h1 class="h2 fw-semibold mb-2">Upload and extract</h1>
+            <p class="text-muted mb-0">Extract readable structure, tables, and formatting from your PDF.</p>
+        </div>
+        <a class="btn btn-outline-secondary" asp-controller="Pdf" asp-action="History">View upload history</a>
+    </div>
+
+    <section class="card workspace-card" aria-labelledby="uploadHeading">
+        <div class="card-header workspace-card-header py-3 px-4">
+            <h2 class="h5 fw-semibold mb-0" id="uploadHeading">New document</h2>
+        </div>
+        <div class="card-body p-4 p-lg-5">
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="alert alert-danger" role="alert">
+                    <ul class="mb-0">
+                        @foreach (var error in ViewData.ModelState.Values.SelectMany(value => value.Errors))
+                        {
+                            <li>@error.ErrorMessage</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <form asp-controller="Pdf" asp-action="Upload" method="post" enctype="multipart/form-data" id="uploadForm">
+                @Html.AntiForgeryToken()
+                <label class="upload-dropzone d-block p-4 p-md-5 text-center" for="pdfFile" id="dropZone">
+                    <svg class="upload-file-icon mb-3" viewBox="0 0 48 48" role="img" aria-label="PDF document">
+                        <path d="M14 4h13l11 11v25a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z" />
+                        <path d="M27 4v12h11M16 28h16M16 34h16" />
+                        <path class="upload-file-icon-accent" d="M16 21h10v4H16z" />
+                    </svg>
+                    <span class="d-block fw-semibold">Drag and drop your PDF here</span>
+                    <span class="d-block text-muted mt-1">or <span class="upload-browse-link">Browse files</span></span>
+                    <span class="d-block small text-muted mt-3" id="fileConstraints">PDF only · Maximum file size 10 MB</span>
+                    <span class="d-block small fw-medium mt-2" id="fileName" aria-live="polite"></span>
+                    <input class="visually-hidden" type="file" id="pdfFile" name="pdfFile" accept=".pdf,application/pdf" required />
+                </label>
+                <div class="alert alert-danger mt-3 mb-0 d-none" id="selectionError" role="alert"></div>
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mt-4">
+                    <span class="small text-muted">Your PDF is processed and its extracted text is saved to history.</span>
+                    <button class="btn btn-primary px-4" type="submit" id="submitButton" disabled>
+                        <span class="spinner-border spinner-border-sm me-2 d-none" id="loadingSpinner" role="status" aria-hidden="true"></span>
+                        <span id="buttonText">Extract document</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+    <script>
+        const maxFileSize = 10 * 1024 * 1024;
+        const input = document.getElementById('pdfFile');
+        const zone = document.getElementById('dropZone');
+        const fileName = document.getElementById('fileName');
+        const selectionError = document.getElementById('selectionError');
+        const submitButton = document.getElementById('submitButton');
+        const form = document.getElementById('uploadForm');
+
+        function validateSelection() {
+            const file = input.files[0];
+            selectionError.classList.add('d-none');
+            selectionError.textContent = '';
+
+            if (!file) {
+                fileName.textContent = '';
+                submitButton.disabled = true;
+                return;
+            }
+
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                selectionError.textContent = 'Select a file with a .pdf extension.';
+            } else if (file.size > maxFileSize) {
+                selectionError.textContent = 'The PDF must be 10 MB or smaller.';
+            }
+
+            const isValid = !selectionError.textContent;
+            selectionError.classList.toggle('d-none', isValid);
+            fileName.textContent = isValid ? file.name : '';
+            submitButton.disabled = !isValid;
+        }
+
+        input.addEventListener('change', validateSelection);
+        zone.addEventListener('dragover', event => {
+            event.preventDefault();
+            zone.classList.add('is-dragging');
+        });
+        zone.addEventListener('dragleave', () => zone.classList.remove('is-dragging'));
+        zone.addEventListener('drop', event => {
+            event.preventDefault();
+            zone.classList.remove('is-dragging');
+            if (event.dataTransfer.files.length) {
+                input.files = event.dataTransfer.files;
+                validateSelection();
+            }
+        });
+
+        form.addEventListener('submit', () => {
+            document.getElementById('loadingSpinner').classList.remove('d-none');
+            document.getElementById('buttonText').textContent = 'Extracting…';
+            submitButton.disabled = true;
+        });
+    </script>
+}
